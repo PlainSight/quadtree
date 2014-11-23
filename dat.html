@@ -12,21 +12,6 @@
 
 </div>
 
-<div>
-<h4>
-Intructerinos
-</h4>
-<p>
-	Left click selects a triangles or move the path nodes
-<p>
-<p>
-	Right click adds a vertex to the graph
-<p>
-<p>
-	Shift (or Control) + click toggles pathability of a triangle
-<p>
-</div>
-
 <script type="text/javascript">
 
 Array.prototype.remove = function(val) {
@@ -49,6 +34,8 @@ var TOPRIGHT = { x: 500, y: 0 };
 var BOTTOMLEFT = { x: 0, y: 500 };
 var BOTTOMRIGHT = { x: 500, y: 500 };
 
+var ATOM = 40;
+
 //variable names no longer refer to color within
 var LIGHTLIGHTBLUE = '#87CEEB';
 var LIGHTBLUE = '#169D5B';
@@ -65,7 +52,7 @@ c.oncontextmenu = function (e) {
     e.preventDefault();
 };
 
-var PathVertices = [ 
+var NodeVertices = [ 
 {
 	x: TOPLEFT.x + 40,
 	y: TOPRIGHT.y + 40
@@ -83,36 +70,20 @@ var MouseDown = function(e) {
 	var y = e.pageY;
 	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
 	
-	//toggle triangle pathability
-	if(e.shiftKey || e.ctrlKey) {
-		TogglePathability(vertex);		
-		return;
-	}
-	
 	//left click
 	if(e.button === 0) {
-		var pathNode = GetPathNodeSelection(vertex);
+		var pathNode = GetNodeSelection(vertex);
 		//check if grabbing a pathnode
 		if(pathNode != null) {
-			DraggingPathNode = pathNode;
-		} else {
-			SelectTriangle(vertex);
+			DraggingNode = pathNode;
 		}
-	}
-	
-	//right click
-	if(e.button === 2) {
-		AddVertex(vertex);
-		DrawTriangles();
 	}
 }
 
 var MouseUp = function(e) {
-	if(DraggingPathNode != null) {
-		DraggingPathNode = null;
-		DrawTriangles();
-		FindPath(PathVertices[0], PathVertices[1]);
-		FindGridPath(PathVertices[0], PathVertices[1]);
+	if(DraggingNode != null) {
+		DraggingNode = null;
+		RenderScene();
 	}
 }
 
@@ -121,15 +92,15 @@ var MouseMove = function(e) {
 	var y = e.pageY;
 	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
 	
-	if(DraggingPathNode != null) {
-		DraggingPathNode.x = vertex.x;
-		DraggingPathNode.y = vertex.y;
-		DrawTriangles();
+	if(DraggingNode != null) {
+		DraggingNode.x = vertex.x;
+		DraggingNode.y = vertex.y;
+		RenderScene();
 	}
 }
 
 var MouseLeave = function(e) {
-	DraggingPathNode = null;
+	DraggingNode = null;
 }
 
 c.addEventListener("mousedown", MouseDown, false);
@@ -138,6 +109,23 @@ c.addEventListener("mouseup", MouseUp, false);
 c.addEventListener("mouseleave", MouseLeave, false);
 var Ctx=c.getContext("2d");
 Ctx.lineWidth = 2;
+
+var RenderScene = function() {
+	console.log('rendering scene');
+	RevealEntities(NodeVertices);
+
+	var array = [];
+	Root.GetFogInfo(array)
+	console.log(array);
+	
+	Ctx.clearRect(0, 0, c.width, c.height);
+	for(var i = 0; i < array.length; i++) {
+		DrawRectangle(array[i]);
+	}
+	DrawNodes();
+	
+	console.log('finished rendering scene');
+}
 
 var DrawRectangle = function(quad, highlight) {
 	if(highlight) {
@@ -156,33 +144,33 @@ var DrawRectangle = function(quad, highlight) {
 
 	Ctx.closePath();
 
-	if(!quad.revealed) {
+	if(quad.revealedStatus != "FullyInBounds") {
 		Ctx.fillStyle = DARKBLUE;
 		Ctx.fill();
 	}
 	Ctx.stroke();
 }
 
-var DrawLines = function(path, color) {
-	Ctx.strokeStyle = LIGHTORANGE;
-	if(color) {
-		Ctx.strokeStyle = color;
-	}
-	Ctx.beginPath();
-	Ctx.moveTo(path[0].x, path[0].y);
-	for(var i = 1; i < path.length; i++) {
-		Ctx.lineTo(path[i].x, path[i].y);
-	}
-	Ctx.stroke();
-	Ctx.closePath();
-}
+// var DrawLines = function(path, color) {
+	// Ctx.strokeStyle = LIGHTORANGE;
+	// if(color) {
+		// Ctx.strokeStyle = color;
+	// }
+	// Ctx.beginPath();
+	// Ctx.moveTo(path[0].x, path[0].y);
+	// for(var i = 1; i < path.length; i++) {
+		// Ctx.lineTo(path[i].x, path[i].y);
+	// }
+	// Ctx.stroke();
+	// Ctx.closePath();
+// }
 
 var DrawNodes = function() {
-	for(var i = 0; i < 2; i++) {
+	for(var i = 0; i < NodeVertices.length; i++) {
 		Ctx.beginPath();
 		Ctx.strokeStyle = BLACK;
 		Ctx.fillStyle = DARKBLUE;
-		Ctx.arc(PathVertices[i].x, PathVertices[i].y, 10, 0, 2 * Math.PI, false);
+		Ctx.arc(NodeVertices[i].x, NodeVertices[i].y, 10, 0, 2 * Math.PI, false);
 		Ctx.stroke();
 		Ctx.fill();
 		Ctx.closePath();
@@ -200,9 +188,9 @@ var DrawText = function(text, y) {
 }
 
 var GetNodeSelection = function(vertex) {
-	for(var i = 0; i < 2; i++) {
-		if(Math.hypot(PathVertices[i].x - vertex.x, PathVertices[i].y - vertex.y) < 11) {
-			return PathVertices[i];
+	for(var i = 0; i < NodeVertices.length; i++) {
+		if(Math.hypot(NodeVertices[i].x - vertex.x, NodeVertices[i].y - vertex.y) < 11) {
+			return NodeVertices[i];
 		}
 	}
 }
@@ -213,43 +201,167 @@ var GetNodeSelection = function(vertex) {
 
 //root quad
 var Root;
+var Tick = 0;
 
 //quadtree object 
-var QuadTree = function(minx, miny, maxx, maxy, parent) {
+var QuadTree = function(minx, miny, maxx, maxy) {
 	this.minx = minx;
 	this.miny = miny;
 	this.maxx = maxx;
 	this.maxy = maxy;
 	this.children = [];
-	this.revealed = false;
-	this.parent = parent;
+	this.revealedStatus = "OutOfBounds";
+	this.revealedTick = -1;
 }
 //v for vertexxa
 QuadTree.prototype.ContainsPoint = function(v) {
 	return (v.x <= maxx && v.x > minx && x.y <= maxy && v.y > miny);
 }
-
-
-
-
-var GetQuad = function(vertex) {
-	for(var i = 0; i < Triangles.length; i++) {
-		if(Triangles[i].IsVertexInside(vertex)) {
-			return Triangles[i];
+//check if min size
+QuadTree.prototype.IsAtom = function() {
+	return this.maxx - this.minx < ATOM;
+}
+//the passed array is assigned all the quads which are fog
+QuadTree.prototype.GetFogInfo = function(array) {
+	if(Tick != this.revealedTick) {
+		array.push(this);	//then obviously fog
+		return;
+	} else {
+		switch (this.revealedStatus) {
+			case "OutOfBounds":
+				array.push(this);	//then fog
+				return;
+			case "PartiallyInBounds":
+				if(this.IsAtom()) {
+					array.push(this);	//then fog
+					return;
+				} else {
+					for(var i = 0; i < 4; i++) {
+						this.children[i].GetFogInfo(array);
+					}
+				}
 		}
 	}
-	return null;
+}
+//checks whether a certain vertex is revealed
+QuadTree.prototype.IsRevealed = function(v)
+{
+	if(Tick == revealedTick)
+	{
+		switch (this.revealedStatus) {
+			case "OutOfBounds":
+				return false;
+			case "FullyInBounds":
+				return true;
+			case "PartiallyInBounds":
+				if(this.children.length != 0) {
+					for(var i = 0; i < 4; i++)
+					{
+						if(this.children[i].ContainsPoint(v))
+						{
+							return this.children[i].IsRevealed(v);
+						}
+					}
+				}
+		}
+	}
+	return false;
+}
+QuadTree.prototype.Reveal = function(v, radius)
+{
+	//already fully revealed this turn
+	if(this.revealedTick == Tick && this.revealedStatus == "FullyInBounds") {
+		return;
+	}
+	
+	//set default state (unrevealed) if not already looked at this turn
+	if(this.revealedTick != Tick) {
+		this.revealedStatus = "OutOfBounds";
+	}
+	this.revealedTick = Tick;
+	
+	//reveal some radius r around point v
+	var thisBounds = this.InBounds(v, radius);
+	
+	switch (thisBounds) {
+		case "FullyInBounds":
+			this.revealedStatus = "FullyInBounds";
+			return;
+		case "OutOfBounds":
+			//default is already set so don't change
+			return;
+		case "PartiallyInBounds":
+			this.revealedStatus = "PartiallyInBounds";
+			if(!this.IsAtom()) {
+				if(this.children.length == 0) {
+					this.MakeChildren();
+				}
+				this.RevealChildren(v, radius);
+			}
+	}
+}
+QuadTree.prototype.RevealChildren = function(v, radius) {
+	this.children[0].Reveal(v, radius);
+	this.children[1].Reveal(v, radius);
+	this.children[2].Reveal(v, radius);
+	this.children[3].Reveal(v, radius);
+}
+QuadTree.prototype.MakeChildren = function() {
+	//minx, miny, maxx, maxy
+	var halfSize = (this.maxx - this.minx)/2;
+	this.children[0] = new QuadTree(this.minx, this.miny, this.minx + halfSize, this.miny + halfSize);
+	this.children[1] = new QuadTree(this.minx + halfSize, this.miny, this.maxx, this.miny + halfSize);
+	this.children[2] = new QuadTree(this.minx, this.miny + halfSize, this.minx + halfSize, this.maxy);
+	this.children[3] = new QuadTree(this.minx + halfSize, this.miny + halfSize, this.maxx, this.maxy);
+}
+QuadTree.prototype.InBounds = function(v, radius)
+{
+	//i think this helps with not branching
+	var rr = square(radius);
+	var minx2 = square(v.x - this.minx);
+	var maxx2 = square(v.x - this.maxx);
+	var miny2 = square(v.y - this.miny);
+	var maxy2 = square(v.y - this.maxy);
+
+	//this checks corners if each corner is in bound then fully in bound
+	var one = minx2 + miny2 < rr;
+	var two = minx2 + maxy2 < rr;
+	var three = maxx2 + miny2 < rr;
+	var four = maxx2 + maxy2 < rr;
+
+	if(one && two && three && four)
+	{
+		return "FullyInBounds";
+	}
+
+	//checks whether the circle overlaps at all
+	var five = v.x - radius < this.maxx;
+	var six = v.x + radius > this.minx;
+	var seven = v.y - radius < this.maxy;
+	var eight = v.y + radius > this.miny;
+
+	if(five && six && seven && eight)
+	{
+		return "PartiallyInBounds";
+	}
+	return "OutOfBounds";
+}
+
+var square = function(n)
+{
+	return n*n;
+}
+
+var RevealEntities = function(entities) {
+	Tick++;
+	for(var i = 0; i < entities.length; i++) {
+		Root.Reveal(entities[i], 200);
+	}
 }
 
 var Initialize = function() {
 
-Root = new QuadTree() {
-	this.minx = 0;
-	this.miny = 0;
-	this.maxx = 500;
-	this.maxy = 500;
-	this.children = [];
-};
+Root = new QuadTree(0, 0, 500, 500);
 
 RenderScene();
 
@@ -264,8 +376,8 @@ window.onload = function() {
 <style type="text/css">
 
 #mrcanvas {
-	width: 800px;;
-	height: 600px;
+	width: 500px;;
+	height: 500px;
 }
 
 </style>
