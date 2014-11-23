@@ -14,7 +14,8 @@
 
 <div>
 
-<span>Toggle Mode: </span><input type="checkbox" id="toggleGrid">
+<span>Toggle Mode: </span><input type="checkbox" id="toggleMode">
+<span>Toggle Lines: </span><input type="checkbox" id="toggleLines">
 
 </div>
 
@@ -25,11 +26,13 @@ Math.hypot = Math.hypot || function(x, y) {
 };
 
 var UseQuadTree = true;
+var ShowQuadLines = false;
 var ATOM = 8;
 var SIGHT = 64;
 
 //variable names no longer refer to color within
 var ORANGE = '#FF6600';
+var WHITE = '#FFFFFF';
 var BLACK = '#000000';
 var GREY = '#999999';
 var DARKGREY = '#444444';
@@ -47,8 +50,16 @@ var ToggleMode = function() {
 	RenderScene();
 }
 
-var checkbox = document.getElementById("toggleGrid");
+var ToggleLines = function() {
+	ShowQuadLines = !ShowQuadLines;
+	RenderScene();
+}
+
+var checkbox = document.getElementById("toggleMode");
 checkbox.addEventListener('click', ToggleMode);
+
+var checkbox = document.getElementById("toggleLines");
+checkbox.addEventListener('click', ToggleLines);
 
 var NodeVertices = []
 for(var i = 0; i < 25; i++) {
@@ -156,10 +167,16 @@ var DrawRectangle = function(quad, highlight) {
 	} else {
 		Ctx.strokeStyle = GREY;
 	}
-	Ctx.fillStyle = DARKGREY;
+	if(quad.revealedTick == Tick && quad.revealedStatus == "FullyInBounds") {
+		Ctx.fillStyle = WHITE;
+	} else {
+		Ctx.fillStyle = DARKGREY;
+	}
 	
 	Ctx.fill();
-	Ctx.stroke();
+	if(ShowQuadLines) {
+		Ctx.stroke();
+	}
 }
 
 var DrawNodes = function() {
@@ -221,7 +238,28 @@ QuadTree.prototype.ContainsPoint = function(v) {
 QuadTree.prototype.IsAtom = function() {
 	return this.maxx - this.minx <= ATOM;
 }
-//the passed array is assigned all the quads which are fog
+//commented method only returns fog - not revealed quads
+/* QuadTree.prototype.GetFogInfo = function(array) {
+	if(Tick != this.revealedTick) {
+		array.push(this);	//then obviously fog - not queried at all
+		return;
+	} else {
+		switch (this.revealedStatus) {
+			case "OutOfBounds":
+				array.push(this);	//then fog
+				return;
+			case "PartiallyInBounds":
+				if(this.IsAtom()) {
+					array.push(this);	//then fog
+					return;
+				} else {
+					for(var i = 0; i < 4; i++) {
+						this.children[i].GetFogInfo(array);
+					}
+				}
+		}
+	}
+} */
 QuadTree.prototype.GetFogInfo = function(array) {
 	if(Tick != this.revealedTick) {
 		array.push(this);	//then obviously fog - not queried at all
@@ -230,6 +268,9 @@ QuadTree.prototype.GetFogInfo = function(array) {
 		switch (this.revealedStatus) {
 			case "OutOfBounds":
 				array.push(this);	//then fog
+				return;
+			case "FullyInBounds":
+				array.push(this);
 				return;
 			case "PartiallyInBounds":
 				if(this.IsAtom()) {
@@ -384,9 +425,10 @@ Quad.prototype.ContainsPoint = function(v) {
 
 var GetGridFogInfo = function(array) {
 	for(var i = 0; i < Quads.length; i++) {
-		if(Quads[i].revealedStatus != "FullyInBounds") {
+		/* if(Quads[i].revealedStatus != "FullyInBounds") {
 			array.push(Quads[i]);
-		}
+		} */
+		array.push(Quads[i]);
 	}
 }
 
