@@ -14,23 +14,33 @@
 
 <div>
 
-<span>Toggle Mode: </span><input type="checkbox" id="toggleMode">
-<span>Toggle Lines: </span><input type="checkbox" id="toggleLines">
+<span>Use Uniform Grid : </span><input type="checkbox" id="toggleMode">
+<span>Toggle Lines: </span><input type="checkbox" id="toggleLines" checked="checked">
 
 </div>
 
 <script type="text/javascript">
 
+//helper method for browsers from stone age
 Math.hypot = Math.hypot || function(x, y) {
   return Math.sqrt(x*x + y*y);
 };
 
+//magic flags
 var UseQuadTree = true;
-var ShowQuadLines = false;
+var ShowQuadLines = true;
+
+//root of quadtree
+var Root;
+//tick helps us not need to rebuild the tree every time, if tick isn't most recent we can act like it isn't visited
+var Tick = 0;
+//uniform quadrilaterals
+var Quads = [];
+
+//magic constants
 var ATOM = 8;
 var SIGHT = 64;
-
-//variable names no longer refer to color within
+var CANVASSIZE = 512;
 var ORANGE = '#FF6600';
 var WHITE = '#FFFFFF';
 var BLACK = '#000000';
@@ -39,12 +49,14 @@ var DARKGREY = '#444444';
 var YELLOW = '#FFFF00';
 
 var c=document.getElementById("mrcanvas");
-c.width = 512;
-c.height = 512;
+c.width = CANVASSIZE;
+c.height = CANVASSIZE;
+//prevent right click menu
 c.oncontextmenu = function (e) {
     e.preventDefault();
 };
 
+//option handlers
 var ToggleMode = function() {
 	UseQuadTree = !UseQuadTree;
 	RenderScene();
@@ -61,6 +73,7 @@ checkbox.addEventListener('click', ToggleMode);
 var checkbox = document.getElementById("toggleLines");
 checkbox.addEventListener('click', ToggleLines);
 
+//initialize view nodes
 var NodeVertices = []
 for(var i = 0; i < 25; i++) {
 	NodeVertices.push({
@@ -78,9 +91,9 @@ var MouseDown = function(e) {
 	
 	//left click
 	if(e.button === 0) {
-		var pathNode = GetNodeSelection(vertex);
-		//check if grabbing a pathnode
-		if(pathNode != null) {
+		var node = GetNodeSelection(vertex);
+		//check if grabbing a node
+		if(node != null) {
 			DraggingNode = pathNode;
 		}
 	}
@@ -111,23 +124,18 @@ var MouseMove = function(e) {
 	}
 }
 
-var TouchMove = function(e) {
-	console.log(e);
-	e.preventDefault();
-	var x = e.targetTouches[0].pageX;
-	var y = e.targetTouches[0].pageY;
-	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
-
-	if(DraggingNode != null) {
-		DraggingNode.x = vertex.x;
-		DraggingNode.y = vertex.y;
-		RenderScene();
+var GetNodeSelection = function(vertex) {
+	var selection = null;
+	for(var i = 0; i < NodeVertices.length; i++) {
+		if(Math.hypot(NodeVertices[i].x - vertex.x, NodeVertices[i].y - vertex.y) < 11) {
+			selection = NodeVertices[i];
+		}
 	}
+	return selection;
 }
 
 c.addEventListener("mousedown", MouseDown, false);
 c.addEventListener("mousemove", MouseMove, false);
-c.addEventListener("touchmove", TouchMove, false);
 c.addEventListener("mouseup", MouseUp, false);
 var Ctx=c.getContext("2d");
 Ctx.lineWidth = 1;
@@ -146,7 +154,6 @@ var RenderScene = function() {
 	for(var i = 0; i < array.length; i++) {
 		DrawRectangle(array[i]);
 	}
-	console.log('drew ' + array.length + ' fog particles');
 	
 	DrawNodes();
 }
@@ -201,25 +208,6 @@ var DrawNodes = function() {
 	// Ctx.fillText(text, x, y);
 // }
 
-var GetNodeSelection = function(vertex) {
-	var selection = null;
-	for(var i = 0; i < NodeVertices.length; i++) {
-		if(Math.hypot(NodeVertices[i].x - vertex.x, NodeVertices[i].y - vertex.y) < 11) {
-			selection = NodeVertices[i];
-		}
-	}
-	return selection;
-}
-
-</script>
-
-<script type="text/javascript">
-
-//root quad
-var Root;
-//tick helps us as we don't need to rebuild the tree every time
-var Tick = 0;
-
 //quadtree object 
 var QuadTree = function(minx, miny, maxx, maxy) {
 	this.minx = minx;
@@ -260,6 +248,7 @@ QuadTree.prototype.IsAtom = function() {
 		}
 	}
 } */
+//returns all OutOfBounds and FullyInBounds quads as well as Atomic quads
 QuadTree.prototype.GetFogInfo = function(array) {
 	if(Tick != this.revealedTick) {
 		array.push(this);	//then obviously fog - not queried at all
@@ -356,8 +345,8 @@ QuadTree.prototype.InBounds = function(v, radius)
 	var cy = (this.maxy + this.miny) / 2;
 	var cr = 0.71 * (this.maxx - this.minx);
 	
-	//furthest the center of a cirle and a square can be while still overlapping 
-	//is raidus of circle + 0.71 x sidelength of square
+	//furthest the center of a circle and a square can be while still overlapping 
+	//is radius of circle + (0.71 * sidelength of square)
 	if(Math.hypot(v.x - cx, v.y - cy) < (cr + radius)) {
 		return "PartiallyInBounds";
 	}
@@ -365,7 +354,6 @@ QuadTree.prototype.InBounds = function(v, radius)
 	return "OutOfBounds";
 }
 
-var Quads = [];
 
 //quad for uniform grid
 var Quad = function(minx, miny, maxx, maxy) {
@@ -455,11 +443,11 @@ var RevealGrid = function(entities) {
 
 var Initialize = function() {
 //instantiate quadtree
-Root = new QuadTree(0, 0, 512, 512);
+Root = new QuadTree(0, 0, CANVASSIZE, CANVASSIZE);
 
 //instantiate uniform grid
-for(var x = 0; x < 512; x += ATOM) {
-	for(var y = 0; y < 512; y += ATOM) {
+for(var x = 0; x < CANVASSIZE; x += ATOM) {
+	for(var y = 0; y < CANVASSIZE; y += ATOM) {
 		var minx = x;
 		var miny = y;
 		var maxx = x + ATOM;
