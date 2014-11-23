@@ -12,6 +12,12 @@
 
 </div>
 
+<div>
+
+<span>Toggle Mode: </span><input type="checkbox" id="toggleGrid">
+
+</div>
+
 <script type="text/javascript">
 
 Math.hypot = Math.hypot || function(x, y) {
@@ -35,6 +41,14 @@ c.height = 512;
 c.oncontextmenu = function (e) {
     e.preventDefault();
 };
+
+var ToggleMode = function() {
+	UseQuadTree = !UseQuadTree;
+	RenderScene();
+}
+
+var checkbox = document.getElementById("toggleGrid");
+checkbox.addEventListener('click', ToggleMode);
 
 var NodeVertices = []
 for(var i = 0; i < 25; i++) {
