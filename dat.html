@@ -18,6 +18,7 @@ Math.hypot = Math.hypot || function(x, y) {
   return Math.sqrt(x*x + y*y);
 };
 
+var UseQuadTree = true;
 var ATOM = 8;
 var SIGHT = 80;
 
@@ -29,17 +30,17 @@ var DARKGREY = '#444444';
 var YELLOW = '#FFFF00';
 
 var c=document.getElementById("mrcanvas");
-c.width = 500;
-c.height = 500;
+c.width = 512;
+c.height = 512;
 c.oncontextmenu = function (e) {
     e.preventDefault();
 };
 
 var NodeVertices = []
-for(var i = 0; i < 64; i++) {
+for(var i = 0; i < 25; i++) {
 	NodeVertices.push({
-		x: 100 + (i * 25) % 200,
-		y: 100 + Math.floor(i / 8) * 25
+		x: 100 + (i * 25) % 125,
+		y: 100 + Math.floor(i / 5) * 25
 	});
 }
 
@@ -61,7 +62,13 @@ var MouseDown = function(e) {
 }
 
 var MouseUp = function(e) {
+	var x = e.pageX;
+	var y = e.pageY;
+	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
+
 	if(DraggingNode != null) {
+		DraggingNode.x = vertex.x;
+		DraggingNode.y = vertex.y;
 		DraggingNode = null;
 		RenderScene();
 	}
@@ -71,7 +78,21 @@ var MouseMove = function(e) {
 	var x = e.pageX;
 	var y = e.pageY;
 	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
-	
+
+	if(DraggingNode != null) {
+		DraggingNode.x = vertex.x;
+		DraggingNode.y = vertex.y;
+		RenderScene();
+	}
+}
+
+var TouchMove = function(e) {
+	console.log(e);
+	e.preventDefault();
+	var x = e.targetTouches[0].pageX;
+	var y = e.targetTouches[0].pageY;
+	var vertex = { x: x - c.offsetLeft, y: y - c.offsetTop};
+
 	if(DraggingNode != null) {
 		DraggingNode.x = vertex.x;
 		DraggingNode.y = vertex.y;
@@ -81,16 +102,21 @@ var MouseMove = function(e) {
 
 c.addEventListener("mousedown", MouseDown, false);
 c.addEventListener("mousemove", MouseMove, false);
+c.addEventListener("touchmove", TouchMove, false);
 c.addEventListener("mouseup", MouseUp, false);
 var Ctx=c.getContext("2d");
 Ctx.lineWidth = 1;
 
 var RenderScene = function() {
-	RevealEntities(NodeVertices);
-
 	var array = [];
-	Root.GetFogInfo(array)
-	
+	if(UseQuadTree) {
+		RevealQuadTree(NodeVertices);
+		Root.GetFogInfo(array)
+	} else {
+		RevealGrid(NodeVertices);
+		GetGridFogInfo(array);
+	}
+
 	Ctx.clearRect(0, 0, c.width, c.height);
 	for(var i = 0; i < array.length; i++) {
 		DrawRectangle(array[i]);
@@ -179,7 +205,7 @@ QuadTree.prototype.ContainsPoint = function(v) {
 }
 //check if min size
 QuadTree.prototype.IsAtom = function() {
-	return this.maxx - this.minx < ATOM;
+	return this.maxx - this.minx <= ATOM;
 }
 //the passed array is assigned all the quads which are fog
 QuadTree.prototype.GetFogInfo = function(array) {
@@ -202,30 +228,6 @@ QuadTree.prototype.GetFogInfo = function(array) {
 				}
 		}
 	}
-}
-//checks whether a certain vertex is revealed
-QuadTree.prototype.IsRevealed = function(v)
-{
-	if(Tick == revealedTick)
-	{
-		switch (this.revealedStatus) {
-			case "OutOfBounds":
-				return false;
-			case "FullyInBounds":
-				return true;
-			case "PartiallyInBounds":
-				if(this.children.length != 0) {
-					for(var i = 0; i < 4; i++)
-					{
-						if(this.children[i].ContainsPoint(v))
-						{
-							return this.children[i].IsRevealed(v);
-						}
-					}
-				}
-		}
-	}
-	return false;
 }
 QuadTree.prototype.Reveal = function(v, radius)
 {
@@ -308,21 +310,107 @@ QuadTree.prototype.InBounds = function(v, radius)
 	return "OutOfBounds";
 }
 
+var Quads = [];
+
+//quad for uniform grid
+var Quad = function(minx, miny, maxx, maxy) {
+	this.minx = minx;
+	this.miny = miny;
+	this.maxx = maxx;
+	this.maxy = maxy;
+	this.revealedStatus = "OutOfBounds";
+	this.revealedTick = -1;
+}
+Quad.prototype.InBounds = function(v, radius)
+{
+	//i think this helps with not branching
+	var rr = square(radius);
+	var minx2 = square(v.x - this.minx);
+	var maxx2 = square(v.x - this.maxx);
+	var miny2 = square(v.y - this.miny);
+	var maxy2 = square(v.y - this.maxy);
+
+	//this checks corners if every corner is in bound then fully in bound
+	var one = minx2 + miny2 < rr;
+	var two = minx2 + maxy2 < rr;
+	var three = maxx2 + miny2 < rr;
+	var four = maxx2 + maxy2 < rr;
+
+	if(one && two && three && four)
+	{
+		return "FullyInBounds";
+	}
+		
+	//get centre of quad
+	var cx = (this.maxx + this.minx) / 2;
+	var cy = (this.maxy + this.miny) / 2;
+	var cr = 0.71 * (this.maxx - this.minx);
+	
+	//furthest the center of a cirle and a square can be while still overlapping 
+	//is raidus of circle + 0.71 x sidelength of square
+	if(Math.hypot(v.x - cx, v.y - cy) < (cr + radius)) {
+		return "PartiallyInBounds";
+	}
+		
+	return "OutOfBounds";
+}
+Quad.prototype.Reveal = function(v, radius) {
+	if(this.revealedTick == Tick && this.revealedStatus == "FullyInBounds") {
+		return;
+	}
+	if(this.revealedTick != Tick) {
+		this.revealedStatus = "OutOfBounds";
+	}
+	this.revealedTick = Tick;
+	this.revealedStatus = this.InBounds(v, radius);
+}
+Quad.prototype.ContainsPoint = function(v) {
+	return (v.x <= maxx && v.x > minx && x.y <= maxy && v.y > miny);
+}
+
+var GetGridFogInfo = function(array) {
+	for(var i = 0; i < Quads.length; i++) {
+		if(Quads[i].revealedStatus != "FullyInBounds") {
+			array.push(Quads[i]);
+		}
+	}
+}
+
 var square = function(n)
 {
 	return n*n;
 }
 
-var RevealEntities = function(entities) {
+var RevealQuadTree = function(entities) {
 	Tick++;
 	for(var i = 0; i < entities.length; i++) {
 		Root.Reveal(entities[i], SIGHT);
 	}
 }
 
-var Initialize = function() {
+var RevealGrid = function(entities) {
+	Tick++;
+	for(var i = 0; i < entities.length; i++) {
+		for(var j = 0; j < Quads.length; j++) {
+			Quads[j].Reveal(entities[i], SIGHT);
+		}
+	}
+}
 
-Root = new QuadTree(0, 0, 500, 500);
+var Initialize = function() {
+//instantiate quadtree
+Root = new QuadTree(0, 0, 512, 512);
+
+//instantiate uniform grid
+for(var x = 0; x < 512; x += ATOM) {
+	for(var y = 0; y < 512; y += ATOM) {
+		var minx = x;
+		var miny = y;
+		var maxx = x + ATOM;
+		var maxy = y + ATOM;
+		Quads.push(new Quad(minx, miny, maxx, maxy));
+	}
+}
 
 RenderScene();
 
@@ -337,8 +425,8 @@ window.onload = function() {
 <style type="text/css">
 
 #mrcanvas {
-	width: 500px;;
-	height: 500px;
+	width: 512px;;
+	height: 512px;
 }
 
 </style>
