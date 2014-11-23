@@ -203,29 +203,6 @@ QuadTree.prototype.GetFogInfo = function(array) {
 		}
 	}
 }
-//get quads of all states
-QuadTree.prototype.GetAllFogInfo = function(array) {
-	if(Tick != this.revealedTick) {
-		array.push(this);	//then obviously fog
-		return;
-	} else {
-		switch (this.revealedStatus) {
-			case "OutOfBounds":
-				array.push(this);	//then fog
-				return;
-			case "PartiallyInBounds":
-				if(this.IsAtom()) {
-					array.push(this);	//then fog
-					return;
-				} else {
-					for(var i = 0; i < 4; i++) {
-						this.children[i].GetFogInfo(array);
-					}
-				}
-		}
-	}
-}
-
 //checks whether a certain vertex is revealed
 QuadTree.prototype.IsRevealed = function(v)
 {
