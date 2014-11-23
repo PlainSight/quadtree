@@ -14,54 +14,34 @@
 
 <script type="text/javascript">
 
-Array.prototype.remove = function(val) {
-    for (var i = 0; i < this.length; i++) {
-        if (this[i] === val) {
-            this.splice(i, 1);
-            i--;
-        }
-    }
-    return this;
-}
-
 Math.hypot = Math.hypot || function(x, y) {
   return Math.sqrt(x*x + y*y);
 };
 
-//magic constants
-var TOPLEFT = { x: 0, y: 0 };
-var TOPRIGHT = { x: 500, y: 0 };
-var BOTTOMLEFT = { x: 0, y: 500 };
-var BOTTOMRIGHT = { x: 500, y: 500 };
-
-var ATOM = 40;
+var ATOM = 8;
+var SIGHT = 80;
 
 //variable names no longer refer to color within
-var LIGHTLIGHTBLUE = '#87CEEB';
-var LIGHTBLUE = '#169D5B';
-var DARKBLUE = '#513317';
-var LIGHTYELLOW = '#FFF176';
-var LIGHTRED = '#F01A24';
-var LIGHTORANGE = '#F15A23';
-var BLACK = '#181B19';
+var ORANGE = '#FF6600';
+var BLACK = '#000000';
+var GREY = '#999999';
+var DARKGREY = '#444444';
+var YELLOW = '#FFFF00';
 
 var c=document.getElementById("mrcanvas");
-c.width = TOPRIGHT.x;
-c.height = BOTTOMLEFT.y;
+c.width = 500;
+c.height = 500;
 c.oncontextmenu = function (e) {
     e.preventDefault();
 };
 
-var NodeVertices = [ 
-{
-	x: TOPLEFT.x + 40,
-	y: TOPRIGHT.y + 40
-}, 
-{
-	x: BOTTOMRIGHT.x - 40,
-	y: BOTTOMRIGHT.y - 40
+var NodeVertices = []
+for(var i = 0; i < 64; i++) {
+	NodeVertices.push({
+		x: 100 + (i * 25) % 200,
+		y: 100 + Math.floor(i / 8) * 25
+	});
 }
-];
 
 var DraggingNode = null;
 
@@ -99,41 +79,28 @@ var MouseMove = function(e) {
 	}
 }
 
-var MouseLeave = function(e) {
-	DraggingNode = null;
-}
-
 c.addEventListener("mousedown", MouseDown, false);
 c.addEventListener("mousemove", MouseMove, false);
 c.addEventListener("mouseup", MouseUp, false);
-c.addEventListener("mouseleave", MouseLeave, false);
 var Ctx=c.getContext("2d");
-Ctx.lineWidth = 2;
+Ctx.lineWidth = 1;
 
 var RenderScene = function() {
-	console.log('rendering scene');
 	RevealEntities(NodeVertices);
 
 	var array = [];
 	Root.GetFogInfo(array)
-	console.log(array);
 	
 	Ctx.clearRect(0, 0, c.width, c.height);
 	for(var i = 0; i < array.length; i++) {
 		DrawRectangle(array[i]);
 	}
-	DrawNodes();
+	console.log('drew ' + array.length + ' fog particles');
 	
-	console.log('finished rendering scene');
+	DrawNodes();
 }
 
 var DrawRectangle = function(quad, highlight) {
-	if(highlight) {
-		Ctx.strokeStyle = LIGHTYELLOW;
-	} else {
-		Ctx.strokeStyle = LIGHTBLUE;
-	}
-
 	Ctx.beginPath();
 
 	Ctx.moveTo(quad.minx, quad.miny);
@@ -143,33 +110,23 @@ var DrawRectangle = function(quad, highlight) {
 	Ctx.lineTo(quad.minx, quad.miny);
 
 	Ctx.closePath();
-
-	if(quad.revealedStatus != "FullyInBounds") {
-		Ctx.fillStyle = DARKBLUE;
-		Ctx.fill();
+	
+	if(highlight) {
+		Ctx.strokeStyle = YELLOW;
+	} else {
+		Ctx.strokeStyle = GREY;
 	}
+	Ctx.fillStyle = DARKGREY;
+	
+	Ctx.fill();
 	Ctx.stroke();
 }
-
-// var DrawLines = function(path, color) {
-	// Ctx.strokeStyle = LIGHTORANGE;
-	// if(color) {
-		// Ctx.strokeStyle = color;
-	// }
-	// Ctx.beginPath();
-	// Ctx.moveTo(path[0].x, path[0].y);
-	// for(var i = 1; i < path.length; i++) {
-		// Ctx.lineTo(path[i].x, path[i].y);
-	// }
-	// Ctx.stroke();
-	// Ctx.closePath();
-// }
 
 var DrawNodes = function() {
 	for(var i = 0; i < NodeVertices.length; i++) {
 		Ctx.beginPath();
 		Ctx.strokeStyle = BLACK;
-		Ctx.fillStyle = DARKBLUE;
+		Ctx.fillStyle = ORANGE;
 		Ctx.arc(NodeVertices[i].x, NodeVertices[i].y, 10, 0, 2 * Math.PI, false);
 		Ctx.stroke();
 		Ctx.fill();
@@ -177,22 +134,24 @@ var DrawNodes = function() {
 	}
 }
 
-var DrawText = function(text, y) {
-	var x = 30;
-	Ctx.font = "bold 20px Arial";
-	Ctx.strokeStyle = 'black';
-	Ctx.lineWidth = 3;
-	Ctx.strokeText(text, x, y);
-	Ctx.fillStyle = 'white';
-	Ctx.fillText(text, x, y);
-}
+// var DrawText = function(text, y) {
+	// var x = 30;
+	// Ctx.font = "bold 20px Arial";
+	// Ctx.strokeStyle = 'black';
+	// Ctx.lineWidth = 3;
+	// Ctx.strokeText(text, x, y);
+	// Ctx.fillStyle = 'white';
+	// Ctx.fillText(text, x, y);
+// }
 
 var GetNodeSelection = function(vertex) {
+	var selection = null;
 	for(var i = 0; i < NodeVertices.length; i++) {
 		if(Math.hypot(NodeVertices[i].x - vertex.x, NodeVertices[i].y - vertex.y) < 11) {
-			return NodeVertices[i];
+			selection = NodeVertices[i];
 		}
 	}
+	return selection;
 }
 
 </script>
@@ -201,6 +160,7 @@ var GetNodeSelection = function(vertex) {
 
 //root quad
 var Root;
+//tick helps us as we don't need to rebuild the tree every time
 var Tick = 0;
 
 //quadtree object 
@@ -224,6 +184,28 @@ QuadTree.prototype.IsAtom = function() {
 //the passed array is assigned all the quads which are fog
 QuadTree.prototype.GetFogInfo = function(array) {
 	if(Tick != this.revealedTick) {
+		array.push(this);	//then obviously fog - not queried at all
+		return;
+	} else {
+		switch (this.revealedStatus) {
+			case "OutOfBounds":
+				array.push(this);	//then fog
+				return;
+			case "PartiallyInBounds":
+				if(this.IsAtom()) {
+					array.push(this);	//then fog
+					return;
+				} else {
+					for(var i = 0; i < 4; i++) {
+						this.children[i].GetFogInfo(array);
+					}
+				}
+		}
+	}
+}
+//get quads of all states
+QuadTree.prototype.GetAllFogInfo = function(array) {
+	if(Tick != this.revealedTick) {
 		array.push(this);	//then obviously fog
 		return;
 	} else {
@@ -243,6 +225,7 @@ QuadTree.prototype.GetFogInfo = function(array) {
 		}
 	}
 }
+
 //checks whether a certain vertex is revealed
 QuadTree.prototype.IsRevealed = function(v)
 {
@@ -323,7 +306,7 @@ QuadTree.prototype.InBounds = function(v, radius)
 	var miny2 = square(v.y - this.miny);
 	var maxy2 = square(v.y - this.maxy);
 
-	//this checks corners if each corner is in bound then fully in bound
+	//this checks corners if every corner is in bound then fully in bound
 	var one = minx2 + miny2 < rr;
 	var two = minx2 + maxy2 < rr;
 	var three = maxx2 + miny2 < rr;
@@ -333,17 +316,18 @@ QuadTree.prototype.InBounds = function(v, radius)
 	{
 		return "FullyInBounds";
 	}
-
-	//checks whether the circle overlaps at all
-	var five = v.x - radius < this.maxx;
-	var six = v.x + radius > this.minx;
-	var seven = v.y - radius < this.maxy;
-	var eight = v.y + radius > this.miny;
-
-	if(five && six && seven && eight)
-	{
+		
+	//get centre of quad
+	var cx = (this.maxx + this.minx) / 2;
+	var cy = (this.maxy + this.miny) / 2;
+	var cr = 0.71 * (this.maxx - this.minx);
+	
+	//furthest the center of a cirle and a square can be while still overlapping 
+	//is raidus of circle + 0.71 x sidelength of square
+	if(Math.hypot(v.x - cx, v.y - cy) < (cr + radius)) {
 		return "PartiallyInBounds";
 	}
+		
 	return "OutOfBounds";
 }
 
@@ -355,7 +339,7 @@ var square = function(n)
 var RevealEntities = function(entities) {
 	Tick++;
 	for(var i = 0; i < entities.length; i++) {
-		Root.Reveal(entities[i], 200);
+		Root.Reveal(entities[i], SIGHT);
 	}
 }
 
