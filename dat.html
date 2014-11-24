@@ -13,11 +13,18 @@
 </div>
 
 <div>
-
-<span>Use Uniform Grid : </span><input type="checkbox" id="toggleMode">
-<span>Toggle Lines: </span><input type="checkbox" id="toggleLines" checked="checked">
-
+	<div class="mrtextblock">
+		<div>
+		  <span>Use Uniform Grid : </span><input type="checkbox" id="toggleMode">
+		</div>
+		<div>
+		  <span>Toggle Lines: </span><input type="checkbox" id="toggleLines" checked="checked">
+		</div>
+	</div>
+	<div class="mrtextblock" id="statistics">
+	</div>
 </div>
+
 
 <script type="text/javascript">
 
@@ -65,6 +72,12 @@ var ToggleMode = function() {
 var ToggleLines = function() {
 	ShowQuadLines = !ShowQuadLines;
 	RenderScene();
+}
+
+var statsBlock = document.getElementById("statistics");
+
+var UpdateStatistics = function(number) {
+	statsBlock.innerHTML = "" + number + " quads rendered.";
 }
 
 var checkbox = document.getElementById("toggleMode");
@@ -156,6 +169,7 @@ var RenderScene = function() {
 	}
 	
 	DrawNodes();
+	UpdateStatistics(array.length);
 }
 
 var DrawRectangle = function(quad, highlight) {
@@ -471,6 +485,16 @@ window.onload = function() {
 #mrcanvas {
 	width: 512px;;
 	height: 512px;
+}
+
+span {
+	width: 140px;
+	display: inline-block;
+}
+
+.mrtextblock {
+	float: left;
+	width: 250px;
 }
 
 </style>
