@@ -317,6 +317,15 @@ QuadTree.prototype.Reveal = function(v, radius)
 					this.MakeChildren();
 				}
 				this.RevealChildren(v, radius);
+				var allRevealed = true;
+				for(var i = 0; i < this.children.length; i++) {
+					if(!(this.children[i].revealedStatus == "FullyInBounds")) {
+						allRevealed = false;
+					}
+				}
+				if(allRevealed) {
+					this.revealedStatus = "FullyInBounds";
+				}
 			}
 	}
 }
